@@ -1,9 +1,9 @@
-const fs = require('fs');
-const path = require('path');
-const { v4: uuidv4 } = require('uuid');
-const { ObjectID } = require('mongodb');
-const dbClient = require('../utils/db');
-const redisClient = require('../utils/redis');
+import fs from 'fs';
+import path from 'path';
+import { v4 as uuidv4 } from 'uuid';
+import { ObjectID } from 'mongodb';
+import dbClient from '../utils/db';
+import redisClient from '../utils/redis';
 
 const ACCEPTED_TYPES = ['folder', 'file', 'image'];
 
@@ -94,4 +94,4 @@ class FilesController {
   }
 }
 
-module.exports = FilesController;
+export default FilesController;
