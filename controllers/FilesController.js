@@ -92,6 +92,67 @@ class FilesController {
       localPath,
     });
   }
+
+  static async getShow(req, res) {
+    const token = req.headers['x-token'];
+    if (!token) return res.status(401).json({ error: 'Unauthorized' });
+
+    const userId = await redisClient.get(`auth_${token}`);
+    if (!userId) return res.status(401).json({ error: 'Unauthorized' });
+
+    const user = await dbClient.db.collection('users').findOne({ _id: ObjectID(userId) });
+    if (!user) return res.status(401).json({ error: 'Unauthorized' });
+
+    const { id } = req.params;
+
+    let file;
+    try {
+      file = await dbClient.db.collection('files').findOne({
+        _id: ObjectID(id),
+        userId: ObjectID(userId),
+      });
+    } catch (err) {
+      return res.status(404).json({ error: 'Not found' });
+    }
+
+    if (!file) return res.status(404).json({ error: 'Not found' });
+
+    return res.status(200).json(file);
+  }
+
+  static async getIndex(req, res) {
+    const token = req.headers['x-token'];
+    if (!token) return res.status(401).json({ error: 'Unauthorized' });
+
+    const userId = await redisClient.get(`auth_${token}`);
+    if (!userId) return res.status(401).json({ error: 'Unauthorized' });
+
+    const user = await dbClient.db.collection('users').findOne({ _id: ObjectID(userId) });
+    if (!user) return res.status(401).json({ error: 'Unauthorized' });
+
+    const { parentId = 0, page = 0 } = req.query;
+
+    let matchParentId;
+    if (parentId === 0 || parentId === '0') {
+      matchParentId = 0;
+    } else {
+      try {
+        matchParentId = ObjectID(parentId);
+      } catch (err) {
+        return res.status(200).json([]);
+      }
+    }
+
+    const pageNumber = Number.isNaN(Number(page)) ? 0 : Number(page);
+
+    const files = await dbClient.db.collection('files').aggregate([
+      { $match: { userId: ObjectID(userId), parentId: matchParentId } },
+      { $skip: pageNumber * 20 },
+      { $limit: 20 },
+    ]).toArray();
+
+    return res.status(200).json(files);
+  }
 }
 
 export default FilesController;
