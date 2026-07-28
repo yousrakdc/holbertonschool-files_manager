@@ -19,6 +19,7 @@ class FilesController {
       : formatted.parentId;
     return formatted;
   }
+
   static async postUpload(req, res) {
     const token = req.headers['x-token'];
     if (!token) return res.status(401).json({ error: 'Unauthorized' });
