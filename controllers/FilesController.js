@@ -3,12 +3,22 @@ import path from 'path';
 import { v4 as uuidv4 } from 'uuid';
 import { ObjectID } from 'mongodb';
 import mime from 'mime-types';
+import Bull from 'bull';
 import dbClient from '../utils/db';
 import redisClient from '../utils/redis';
 
 const ACCEPTED_TYPES = ['folder', 'file', 'image'];
 
+const fileQueue = new Bull('fileQueue');
+
 class FilesController {
+  static formatFile(file) {
+    const formatted = { ...file };
+    formatted.parentId = (formatted.parentId && formatted.parentId !== '0')
+      ? formatted.parentId.toString()
+      : formatted.parentId;
+    return formatted;
+  }
   static async postUpload(req, res) {
     const token = req.headers['x-token'];
     if (!token) return res.status(401).json({ error: 'Unauthorized' });
@@ -66,7 +76,9 @@ class FilesController {
         name,
         type,
         isPublic,
-        parentId: fileDocument.parentId,
+        parentId: (fileDocument.parentId && fileDocument.parentId !== '0')
+          ? fileDocument.parentId.toString()
+          : fileDocument.parentId,
       });
     }
 
@@ -83,13 +95,22 @@ class FilesController {
 
     const result = await dbClient.db.collection('files').insertOne(fileDocument);
 
+    if (type === 'image') {
+      await fileQueue.add({
+        userId,
+        fileId: result.insertedId.toString(),
+      });
+    }
+
     return res.status(201).json({
       id: result.insertedId,
       userId,
       name,
       type,
       isPublic,
-      parentId: fileDocument.parentId,
+      parentId: (fileDocument.parentId && fileDocument.parentId !== '0')
+        ? fileDocument.parentId.toString()
+        : fileDocument.parentId,
       localPath,
     });
   }
@@ -118,7 +139,7 @@ class FilesController {
 
     if (!file) return res.status(404).json({ error: 'Not found' });
 
-    return res.status(200).json(file);
+    return res.status(200).json(FilesController.formatFile(file));
   }
 
   static async getIndex(req, res) {
@@ -152,7 +173,9 @@ class FilesController {
       { $limit: 20 },
     ]).toArray();
 
-    return res.status(200).json(files);
+    const formattedFiles = files.map((f) => FilesController.formatFile(f));
+
+    return res.status(200).json(formattedFiles);
   }
 
   static async putPublish(req, res) {
@@ -186,7 +209,7 @@ class FilesController {
 
     const updatedFile = await dbClient.db.collection('files').findOne({ _id: ObjectID(id) });
 
-    return res.status(200).json(updatedFile);
+    return res.status(200).json(FilesController.formatFile(updatedFile));
   }
 
   static async putUnpublish(req, res) {
@@ -220,7 +243,7 @@ class FilesController {
 
     const updatedFile = await dbClient.db.collection('files').findOne({ _id: ObjectID(id) });
 
-    return res.status(200).json(updatedFile);
+    return res.status(200).json(FilesController.formatFile(updatedFile));
   }
 
   static async getFile(req, res) {
@@ -249,12 +272,22 @@ class FilesController {
       return res.status(400).json({ error: 'A folder doesn\'t have content' });
     }
 
-    if (!file.localPath || !fs.existsSync(file.localPath)) {
+    if (!file.localPath) return res.status(404).json({ error: 'Not found' });
+
+    const { size } = req.query;
+    const acceptedSizes = ['500', '250', '100'];
+
+    let filePath = file.localPath;
+    if (size && acceptedSizes.includes(size)) {
+      filePath = `${file.localPath}_${size}`;
+    }
+
+    if (!fs.existsSync(filePath)) {
       return res.status(404).json({ error: 'Not found' });
     }
 
     const mimeType = mime.lookup(file.name) || 'application/octet-stream';
-    const content = fs.readFileSync(file.localPath);
+    const content = fs.readFileSync(filePath);
 
     res.setHeader('Content-Type', mimeType);
     return res.status(200).send(content);

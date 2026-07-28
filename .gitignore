@@ -1,0 +1,37 @@
+# Node modules
+node_modules/
+
+# Logs
+logs/
+*.log
+
+# Runtime data
+/tmp/
+tmp/
+dump.rdb
+
+# Build output
+dist/
+build/
+
+# Coverage
+coverage/
+
+# Env files
+.env
+.env.*
+
+# OS files
+.DS_Store
+
+# Editors
+.vscode/
+.idea/
+
+# Misc
+.eslintcache
+.nyc_output/
+.cache/
+node_modules/
+
+babel.config.js
